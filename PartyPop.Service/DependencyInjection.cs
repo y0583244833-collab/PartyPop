@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using PartyPop.Core.Interfaces.Services;
 using PartyPop.Service.Auth;
+using PartyPop.Service.Catalog;
 using PartyPop.Service.Mapping;
 
 namespace PartyPop.Service;
@@ -17,8 +18,13 @@ public static class DependencyInjection
         services.AddSingleton<IPasswordHasher, BCryptPasswordHasher>();
         services.AddSingleton<ITokenService, TokenService>();
 
+        // חישוב טהור שתלוי רק ב-IOptions, ולכן גם הוא Singleton
+        services.AddSingleton<IAvailabilityCalculator, AvailabilityCalculator>();
+
         // Scoped: תלויים ב-Repositories, שתלויים ב-DbContext
         services.AddScoped<IAuthService, AuthService>();
+        services.AddScoped<ICategoryService, CategoryService>();
+        services.AddScoped<IProductService, ProductService>();
 
         return services;
     }

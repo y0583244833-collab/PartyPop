@@ -17,6 +17,8 @@ public static class DependencyInjection
         // הכל Scoped, כמו ה-DbContext: מופע אחד לכל בקשה
         services.AddScoped<IUnitOfWork, UnitOfWork>();
         services.AddScoped<IUserRepository, UserRepository>();
+        services.AddScoped<ICategoryRepository, CategoryRepository>();
+        services.AddScoped<IProductRepository, ProductRepository>();
         services.AddScoped<DbSeeder>();
 
         return services;
