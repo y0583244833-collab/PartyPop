@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using PartyPop.Core.Interfaces.Repositories;
 using PartyPop.Data.Repositories;
 using PartyPop.Data.Seed;
+using PartyPop.Data.Storage;
 
 namespace PartyPop.Data;
 
@@ -19,7 +20,13 @@ public static class DependencyInjection
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<ICategoryRepository, CategoryRepository>();
         services.AddScoped<IProductRepository, ProductRepository>();
+        services.AddScoped<ICartRepository, CartRepository>();
+        services.AddScoped<IOrderRepository, OrderRepository>();
+        services.AddScoped<IProductDayUsageRepository, ProductDayUsageRepository>();
         services.AddScoped<DbSeeder>();
+
+        // אין לו מצב פנימי ואין תלות ב-DbContext
+        services.AddSingleton<IFileStorage, LocalFileStorage>();
 
         return services;
     }

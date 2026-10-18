@@ -3,6 +3,7 @@ using PartyPop.Core.Interfaces.Services;
 using PartyPop.Service.Auth;
 using PartyPop.Service.Catalog;
 using PartyPop.Service.Mapping;
+using PartyPop.Service.Orders;
 
 namespace PartyPop.Service;
 
@@ -25,6 +26,8 @@ public static class DependencyInjection
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<ICategoryService, CategoryService>();
         services.AddScoped<IProductService, ProductService>();
+        services.AddScoped<ICartService, CartService>();
+        services.AddScoped<IOrderService, OrderService>();
 
         return services;
     }

@@ -486,3 +486,9 @@ $RECYCLE.BIN/
 logs/
 # תמונות שהועלו
 PartyPop.API/wwwroot/images/
+PartyPop.API/wwwroot/images/
+
+logs/
+**/wwwroot/images/
+STEP*.md
+*.png

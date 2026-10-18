@@ -28,6 +28,9 @@ public class ProductQueryParams : PagingParams
     public DateOnly? Date { get; set; }
     public ShiftType? Shift { get; set; }
 
+    /// <summary>מנהל בלבד: להציג גם מוצרים מושבתים (Inactive). ללקוח מתעלמים מזה.</summary>
+    public bool IncludeInactive { get; set; }
+
     /// <summary>price / name</summary>
     [RegularExpression("^(?i)(price|name)$")]
     public string SortBy { get; set; } = "name";

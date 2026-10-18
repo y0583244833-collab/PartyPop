@@ -24,8 +24,10 @@ public class ProductRepository : IProductRepository
     public async Task<(IReadOnlyList<ProductWithUsage> Items, int TotalCount)> GetCatalogAsync(
         ProductQueryParams query, decimal fullDayFactor, CancellationToken ct)
     {
-        // הקטלוג מציג רק מוצרים פעילים
-        var products = _db.Products.AsNoTracking().Where(p => p.Status == ProductStatus.Active);
+        // הקטלוג מציג רק מוצרים פעילים (מנהל יכול לבקש גם מושבתים)
+        var products = _db.Products.AsNoTracking();
+        if (!query.IncludeInactive)
+            products = products.Where(p => p.Status == ProductStatus.Active);
 
         if (query.CategoryId is not null)
             products = products.Where(p => p.CategoryId == query.CategoryId);
@@ -52,43 +54,97 @@ public class ProductRepository : IProductRepository
         if (query.Budget is not null)
             products = products.Where(p => p.PricePerShift * factor <= query.Budget);
 
-        // שלב 8: כאן ייכנס סינון "זמין > 0" לפי date + shift, לפני ה-Count וה-Skip/Take
+        // מוצר + המונים של התאריך (Left Join). בלי תאריך: המונים 0
+        var rows = query.Date is { } date
+            ? WithUsage(products, date)
+            : products.Select(p => new UsageRow { Product = p, Morning = 0, Afternoon = 0 });
 
-        var totalCount = await products.CountAsync(ct);
+        // "זמין > 0" בתוך ה-Where, לפני Count ו-Skip/Take, כדי שהדפדוף וה-totalCount יהיו נכונים
+        if (query.Date is not null && query.Shift is { } shift)
+            rows = shift switch
+            {
+                ShiftType.Morning => rows.Where(r =>
+                    r.Product.TotalQuantity - r.Product.OutOfServiceQuantity - r.Morning > 0),
+                ShiftType.AfternoonEvening => rows.Where(r =>
+                    r.Product.TotalQuantity - r.Product.OutOfServiceQuantity - r.Afternoon > 0),
+                // יום שלם: לפי המשמרת העמוסה מבין השתיים
+                _ => rows.Where(r =>
+                    r.Product.TotalQuantity - r.Product.OutOfServiceQuantity
+                    - (r.Morning > r.Afternoon ? r.Morning : r.Afternoon) > 0)
+            };
+
+        var totalCount = await rows.CountAsync(ct);
 
         var desc = query.SortDir.Equals("desc", StringComparison.OrdinalIgnoreCase);
         var sorted = query.SortBy.Equals("price", StringComparison.OrdinalIgnoreCase)
-            ? (desc ? products.OrderByDescending(p => p.PricePerShift) : products.OrderBy(p => p.PricePerShift))
-            : (desc ? products.OrderByDescending(p => p.Name) : products.OrderBy(p => p.Name));
+            ? (desc ? rows.OrderByDescending(r => r.Product.PricePerShift) : rows.OrderBy(r => r.Product.PricePerShift))
+            : (desc ? rows.OrderByDescending(r => r.Product.Name) : rows.OrderBy(r => r.Product.Name));
 
         // ThenBy(Id): סדר יציב, כדי שמוצר לא "יקפוץ" בין עמודים
-        var items = await sorted.ThenBy(p => p.Id)
+        var page = await sorted.ThenBy(r => r.Product.Id)
             .Skip((query.Page - 1) * query.PageSize)
             .Take(query.PageSize)
-            .Include(p => p.Category)
+            .Select(r => new { r.Product, CategoryName = r.Product.Category.Name, r.Morning, r.Afternoon })
             .ToListAsync(ct);
 
-        // שלב 8: המונים יגיעו מ-ProductDayUsage באותה שאילתה. כרגע 0
-        return (items.Select(p => new ProductWithUsage(p, 0, 0)).ToList(), totalCount);
+        var items = page.Select(x =>
+        {
+            x.Product.Category = new Category { Id = x.Product.CategoryId, Name = x.CategoryName };
+            return new ProductWithUsage(x.Product, x.Morning, x.Afternoon);
+        }).ToList();
+
+        return (items, totalCount);
     }
 
-    // שלב 8
-    public Task<ProductWithUsage?> GetWithUsageAsync(int id, DateOnly date, CancellationToken ct) =>
-        throw new NotImplementedException("ייכתב בשלב 8 (זמינות)");
+    public async Task<ProductWithUsage?> GetWithUsageAsync(int id, DateOnly date, CancellationToken ct)
+    {
+        var row = await WithUsage(_db.Products.AsNoTracking().Where(p => p.Id == id), date)
+            .FirstOrDefaultAsync(ct);
+        return row is null ? null : new ProductWithUsage(row.Product, row.Morning, row.Afternoon);
+    }
 
-    // שלב 9
-    public Task<IReadOnlyList<ProductWithUsage>> GetManyWithUsageAsync(
-        IEnumerable<int> ids, DateOnly date, CancellationToken ct) =>
-        throw new NotImplementedException("ייכתב בשלב 9 (סל)");
+    public async Task<IReadOnlyList<ProductWithUsage>> GetManyWithUsageAsync(
+        IEnumerable<int> ids, DateOnly date, CancellationToken ct)
+    {
+        var idList = ids.Distinct().ToList();
+        var rows = await WithUsage(_db.Products.AsNoTracking().Where(p => idList.Contains(p.Id)), date)
+            .ToListAsync(ct);
+        return rows.Select(r => new ProductWithUsage(r.Product, r.Morning, r.Afternoon)).ToList();
+    }
 
-    // שלב 10
-    public Task<IReadOnlyList<Product>> GetByIdsAsync(IEnumerable<int> ids, CancellationToken ct) =>
-        throw new NotImplementedException("ייכתב בשלב 10 (הזמנות)");
+    public async Task<IReadOnlyList<Product>> GetByIdsAsync(IEnumerable<int> ids, CancellationToken ct)
+    {
+        var idList = ids.Distinct().ToList();
+        return await _db.Products.Where(p => idList.Contains(p.Id)).ToListAsync(ct);
+    }
 
     public async Task AddAsync(Product product, CancellationToken ct) =>
         await _db.Products.AddAsync(product, ct);
 
+    /// <summary>
+    /// Left Join ל-ProductDayUsage של התאריך, בשאילתה אחת (בלי N+1).
+    /// אין שורה לתאריך → שני המונים 0.
+    /// </summary>
+    private IQueryable<UsageRow> WithUsage(IQueryable<Product> products, DateOnly date) =>
+        from p in products
+        join u in _db.ProductDayUsages.Where(u => u.EventDate == date)
+            on p.Id equals u.ProductId into usages
+        from u in usages.DefaultIfEmpty()
+        select new UsageRow
+        {
+            Product = p,
+            Morning = u == null ? 0 : u.MorningReserved,
+            Afternoon = u == null ? 0 : u.AfternoonReserved
+        };
+
     /// <summary>כדי ש-% או _ בחיפוש ייחשבו כתו רגיל ולא כ-wildcard.</summary>
     private static string EscapeLike(string s) =>
         s.Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_");
+
+    private sealed class UsageRow
+    {
+        public Product Product { get; init; } = null!;
+        public int Morning { get; init; }
+        public int Afternoon { get; init; }
+    }
 }

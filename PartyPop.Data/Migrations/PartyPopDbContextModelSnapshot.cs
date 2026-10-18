@@ -22,6 +22,74 @@ namespace PartyPop.Data.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("PartyPop.Core.Entities.Cart", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateOnly?>("EventDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Shift")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("integer");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId")
+                        .IsUnique();
+
+                    b.ToTable("Carts", (string)null);
+                });
+
+            modelBuilder.Entity("PartyPop.Core.Entities.CartItem", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("AddedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("CartId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ProductId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProductId");
+
+                    b.HasIndex("CartId", "ProductId")
+                        .IsUnique();
+
+                    b.ToTable("CartItems", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_CartItems_Quantity", "\"Quantity\" > 0");
+                        });
+                });
+
             modelBuilder.Entity("PartyPop.Core.Entities.Category", b =>
                 {
                     b.Property<int>("Id")
@@ -374,6 +442,46 @@ namespace PartyPop.Data.Migrations
                         });
                 });
 
+            modelBuilder.Entity("PartyPop.Core.Entities.ProductDayUsage", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AfternoonReserved")
+                        .HasColumnType("integer");
+
+                    b.Property<DateOnly>("EventDate")
+                        .HasColumnType("date");
+
+                    b.Property<int>("MorningReserved")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ProductId")
+                        .HasColumnType("integer");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProductId", "EventDate")
+                        .IsUnique()
+                        .HasDatabaseName("IX_ProductDayUsage_Product_Date");
+
+                    b.ToTable("ProductDayUsages", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_ProductDayUsages_Afternoon", "\"AfternoonReserved\" >= 0");
+
+                            t.HasCheckConstraint("CK_ProductDayUsages_Morning", "\"MorningReserved\" >= 0");
+                        });
+                });
+
             modelBuilder.Entity("PartyPop.Core.Entities.User", b =>
                 {
                     b.Property<int>("Id")
@@ -424,6 +532,36 @@ namespace PartyPop.Data.Migrations
                     b.ToTable("Users", (string)null);
                 });
 
+            modelBuilder.Entity("PartyPop.Core.Entities.Cart", b =>
+                {
+                    b.HasOne("PartyPop.Core.Entities.User", "User")
+                        .WithOne("Cart")
+                        .HasForeignKey("PartyPop.Core.Entities.Cart", "UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("PartyPop.Core.Entities.CartItem", b =>
+                {
+                    b.HasOne("PartyPop.Core.Entities.Cart", "Cart")
+                        .WithMany("Items")
+                        .HasForeignKey("CartId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("PartyPop.Core.Entities.Product", "Product")
+                        .WithMany("CartItems")
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Cart");
+
+                    b.Navigation("Product");
+                });
+
             modelBuilder.Entity("PartyPop.Core.Entities.Order", b =>
                 {
                     b.HasOne("PartyPop.Core.Entities.User", "User")
@@ -465,6 +603,22 @@ namespace PartyPop.Data.Migrations
                     b.Navigation("Category");
                 });
 
+            modelBuilder.Entity("PartyPop.Core.Entities.ProductDayUsage", b =>
+                {
+                    b.HasOne("PartyPop.Core.Entities.Product", "Product")
+                        .WithMany("DayUsages")
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Product");
+                });
+
+            modelBuilder.Entity("PartyPop.Core.Entities.Cart", b =>
+                {
+                    b.Navigation("Items");
+                });
+
             modelBuilder.Entity("PartyPop.Core.Entities.Category", b =>
                 {
                     b.Navigation("Products");
@@ -477,11 +631,17 @@ namespace PartyPop.Data.Migrations
 
             modelBuilder.Entity("PartyPop.Core.Entities.Product", b =>
                 {
+                    b.Navigation("CartItems");
+
+                    b.Navigation("DayUsages");
+
                     b.Navigation("OrderItems");
                 });
 
             modelBuilder.Entity("PartyPop.Core.Entities.User", b =>
                 {
+                    b.Navigation("Cart");
+
                     b.Navigation("Orders");
                 });
 #pragma warning restore 612, 618

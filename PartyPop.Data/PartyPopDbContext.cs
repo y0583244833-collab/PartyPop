@@ -12,15 +12,13 @@ public class PartyPopDbContext : DbContext
     public DbSet<Product> Products => Set<Product>();
     public DbSet<Order> Orders => Set<Order>();
     public DbSet<OrderItem> OrderItems => Set<OrderItem>();
+    public DbSet<Cart> Carts => Set<Cart>();
+    public DbSet<CartItem> CartItems => Set<CartItem>();
+    public DbSet<ProductDayUsage> ProductDayUsages => Set<ProductDayUsage>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         // טוען את כל קבצי IEntityTypeConfiguration מתיקיית Configurations
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(PartyPopDbContext).Assembly);
-
-        // נכנסות למסד בשלבים הבאים (Migration שני ושלישי)
-        modelBuilder.Ignore<Cart>();
-        modelBuilder.Ignore<CartItem>();
-        modelBuilder.Ignore<ProductDayUsage>();
     }
 }

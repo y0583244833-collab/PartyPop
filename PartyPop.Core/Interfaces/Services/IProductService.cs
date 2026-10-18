@@ -14,5 +14,6 @@ public interface IProductService
     Task UpdateAsync(int id, ProductUpdateRequest request, CancellationToken ct);
     Task SetOutOfServiceAsync(int id, OutOfServiceRequest request, CancellationToken ct);
     Task DeleteAsync(int id, CancellationToken ct);
+    Task ActivateAsync(int id, CancellationToken ct);
     Task<string> UploadImageAsync(int id, FileUpload file, CancellationToken ct);
 }
