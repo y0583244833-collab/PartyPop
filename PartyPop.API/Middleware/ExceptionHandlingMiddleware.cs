@@ -61,6 +61,7 @@ public class ExceptionHandlingMiddleware
 
         var (status, message) = ex switch
         {
+            UnauthorizedException => (StatusCodes.Status401Unauthorized, ex.Message),
             NotFoundException => (StatusCodes.Status404NotFound, ex.Message),
             ForbiddenException => (StatusCodes.Status403Forbidden, ex.Message),
             BusinessRuleException => (StatusCodes.Status400BadRequest, ex.Message),
@@ -75,7 +76,7 @@ public class ExceptionHandlingMiddleware
             case ConcurrencyConflictException:
                 _logger.LogWarning(ex, "Concurrency conflict was not handled in the Service layer");
                 break;
-            case NotFoundException or ForbiddenException or BusinessRuleException or ConflictException:
+            case UnauthorizedException or NotFoundException or ForbiddenException or BusinessRuleException or ConflictException:
                 _logger.LogInformation("Request rejected with {StatusCode}: {Reason}", status, ex.Message);
                 break;
             default:

@@ -5,6 +5,7 @@ using NLog.Web;
 using PartyPop.API.Extensions;
 using PartyPop.API.Middleware;
 using PartyPop.Data;
+using PartyPop.Service;
 
 // לוגר ראשוני: תופס שגיאות שקורות עוד לפני שהמערכת עלתה
 var logger = LogManager.Setup().LoadConfigurationFromAppSettings().GetCurrentClassLogger();
@@ -26,6 +27,9 @@ try
             "Connection string 'DefaultConnection' is missing. Set it with dotnet user-secrets.");
     builder.Services.AddDataLayer(connectionString);
 
+    // ---------- Service ----------
+    builder.Services.AddServiceLayer();
+
     // ---------- שירותים כלליים ----------
     // Singleton בטוח: TimeProvider לא מחזיק שום Scoped
     builder.Services.AddSingleton(TimeProvider.System);
@@ -43,16 +47,15 @@ try
     builder.Services.AddSwaggerWithJwt();
     builder.Services.AddClientCors(builder.Configuration);
 
-    // ---------- Auth (JWT יוגדר בשלב 5) ----------
-    builder.Services.AddAuthentication();
-    builder.Services.AddAuthorization();
+    // ---------- Auth: JWT ----------
+    builder.Services.AddJwtAuthentication(builder.Configuration);
 
     var app = builder.Build();
 
     // ---------- עלייה בלי התערבות ידנית ----------
     if (app.Environment.IsDevelopment())
     {
-        await app.Services.MigrateDatabaseAsync();
+        await app.Services.InitializeDatabaseAsync();   // Migrations + מנהל ולקוח דמו
     }
 
     // ---------- Pipeline (הסדר חשוב!) ----------
@@ -66,8 +69,7 @@ try
     }
 
     app.UseHttpsRedirection();                          // 4.
-    app.UseStaticFiles();
-    // 5. תמונות מ-wwwroot
+    app.UseStaticFiles();                               // 5. תמונות מ-wwwroot
     app.UseCors("Client");   // 6. לפני Authentication
     app.UseAuthentication();                            // 7. מי את?
     app.UseAuthorization();                             // 8. מה מותר לך?
