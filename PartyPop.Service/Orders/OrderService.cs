@@ -168,9 +168,21 @@ public class OrderService : IOrderService
         return _mapper.Map<OrderResponse>(order);
     }
 
-    // שלב 11
-    public Task<PagedResult<OrderResponse>> GetAllAsync(OrderQueryParams query, CancellationToken ct) =>
-        throw new NotImplementedException("ייכתב בשלב 11 (ניהול הזמנות)");
+    /// <summary>היסטוריה למנהל.</summary>
+    public async Task<PagedResult<OrderResponse>> GetAllAsync(OrderQueryParams query, CancellationToken ct)
+    {
+        if (query.FromDate is not null && query.ToDate is not null && query.FromDate > query.ToDate)
+            throw new BusinessRuleException("תאריך ההתחלה מאוחר מתאריך הסיום");
+
+        var (items, totalCount) = await _orders.GetPagedAsync(query, ct);
+        return new PagedResult<OrderResponse>
+        {
+            Items = _mapper.Map<List<OrderResponse>>(items),
+            Page = query.Page,
+            PageSize = query.PageSize,
+            TotalCount = totalCount
+        };
+    }
 
     // ================= ביטול / עדכון סטטוס =================
 

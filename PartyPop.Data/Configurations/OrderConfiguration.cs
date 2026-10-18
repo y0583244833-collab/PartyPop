@@ -11,6 +11,9 @@ public class OrderConfiguration : IEntityTypeConfiguration<Order>
         builder.ToTable("Orders");
         builder.HasKey(o => o.Id);
 
+        // מספרי הזמנה בני 5 ספרות: המספור הרץ מתחיל מ-10000
+        builder.Property(o => o.Id).HasIdentityOptions(startValue: 10000);
+
         builder.Property(o => o.EventAddress).IsRequired().HasMaxLength(200);
         builder.Property(o => o.ContactPhone).IsRequired().HasMaxLength(20);
         builder.Property(o => o.Notes).HasMaxLength(500);

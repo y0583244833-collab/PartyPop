@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using PartyPop.API.Extensions;
+using PartyPop.Core.DTOs.Common;
 using PartyPop.Core.DTOs.Orders;
 using PartyPop.Core.Interfaces.Services;
 
@@ -36,6 +37,15 @@ public class OrdersController : ControllerBase
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<IReadOnlyList<OrderResponse>>> GetMine(CancellationToken ct) =>
         Ok(await _orders.GetMyOrdersAsync(User.GetUserId(), ct));
+
+    /// <summary>היסטוריית הזמנות (מנהל): סינון, מיון ודפדוף.</summary>
+    [HttpGet]
+    [Authorize(Roles = "Admin")]
+    [ProducesResponseType(typeof(PagedResult<OrderResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<ActionResult<PagedResult<OrderResponse>>> GetAll([FromQuery] OrderQueryParams query, CancellationToken ct) =>
+        Ok(await _orders.GetAllAsync(query, ct));
 
     /// <summary>הזמנה בודדת: הבעלים או מנהל.</summary>
     [HttpGet("{id:int}")]

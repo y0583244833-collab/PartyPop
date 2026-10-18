@@ -10,7 +10,8 @@ namespace PartyPop.Service.Orders;
 
 /// <summary>
 /// הסל של הלקוח: תאריך ומשמרת אחת, ופריטים.
-/// הסל לא שומר מקום! הזמינות מוצגת כאזהרה בלבד, והבדיקה האמיתית נעשית באישור ההזמנה.
+/// הסל לא שומר מקום! בהוספה ובשינוי כמות אי אפשר לבקש יותר ממה שזמין כרגע,
+/// אבל הבדיקה הקובעת (עם concurrency token) נעשית באישור ההזמנה.
 /// </summary>
 public class CartService : ICartService
 {
@@ -79,6 +80,7 @@ public class CartService : ICartService
 
         // מוצר שכבר בסל: מגדילים כמות ולא יוצרים שורה שנייה
         var item = cart.Items.FirstOrDefault(i => i.ProductId == request.ProductId);
+        await EnsureInStockAsync(cart, product, (item?.Quantity ?? 0) + request.Quantity, ct);
         if (item is null)
         {
             item = new CartItem { ProductId = product.Id, Product = product, Quantity = request.Quantity, AddedAt = Now };
@@ -101,6 +103,7 @@ public class CartService : ICartService
     public async Task UpdateItemAsync(int userId, int itemId, UpdateCartItemRequest request, CancellationToken ct)
     {
         var (cart, item) = await GetMyItemAsync(userId, itemId, ct);
+        await EnsureInStockAsync(cart, item.Product, request.Quantity, ct);
         item.Quantity = request.Quantity;
         cart.UpdatedAt = Now;
         await SaveAsync(userId, ct);
@@ -115,6 +118,27 @@ public class CartService : ICartService
     }
 
     // ================= עזר =================
+
+    /// <summary>
+    /// אי אפשר לבקש יותר יחידות ממה שיש: לפי התאריך והמשמרת של הסל אם נבחרו,
+    /// ואחרת לפי כל היחידות התקינות של המוצר.
+    /// </summary>
+    private async Task EnsureInStockAsync(Cart cart, Product product, int requestedQuantity, CancellationToken ct)
+    {
+        int morning = 0, afternoon = 0;
+        if (cart.EventDate is { } date)
+        {
+            var row = (await _products.GetManyWithUsageAsync([product.Id], date, ct)).FirstOrDefault();
+            if (row is not null)
+                (morning, afternoon) = (row.MorningReserved, row.AfternoonReserved);
+        }
+
+        var available = _calculator.GetAvailable(product, morning, afternoon, cart.Shift ?? ShiftType.Morning);
+        if (requestedQuantity > available)
+            throw new BusinessRuleException(available == 0
+                ? $"אין יחידות זמינות של {product.Name}"
+                : $"יש במלאי רק {available} יחידות של {product.Name}");
+    }
 
     private async Task<Cart> GetOrCreateAsync(int userId, CancellationToken ct)
     {
