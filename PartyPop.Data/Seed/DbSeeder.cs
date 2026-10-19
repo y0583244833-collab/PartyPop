@@ -45,9 +45,22 @@ public class DbSeeder
         }
 
         var email = seed.Email.Trim().ToLowerInvariant();
-        if (await _db.Users.AnyAsync(u => u.Email == email, ct))
+        var existing = await _db.Users.FirstOrDefaultAsync(u => u.Email == email, ct);
+        if (existing is not null)
+        {
+            if (!_hasher.Verify(seed.Password, existing.PasswordHash))
+            {
+                existing.PasswordHash = _hasher.Hash(seed.Password);
+                existing.Role = role;
+                await _db.SaveChangesAsync(ct);
+                _logger.LogInformation("Seed user {UserId} password updated", existing.Id);
+            }
+            else
+            {
+                _logger.LogInformation("Seed user {UserId} already up to date", existing.Id);
+            }
             return;
-
+        }
         var user = new User
         {
             FirstName = seed.FirstName,
